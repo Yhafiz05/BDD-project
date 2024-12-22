@@ -1,3 +1,5 @@
+import random
+
 import psycopg2
 import time
 import csv
@@ -10,7 +12,8 @@ def connect_to_db():
             host="localhost",  # Replace with your server address
             database="postgres",  # Database name
             user="postgres",  # Username
-            password="admin"  # Password
+            password="admin", # Password
+            port="5433" # Port
         )
         print("Successfully connected to the PostgreSQL database")
         return connection
@@ -23,6 +26,7 @@ def drop_all_indexes(connection):
     """Drop all indexes on the podcast_rankings table."""
     cursor = connection.cursor()
     try:
+
         print("Dropping all indexes on the 'podcast_rankings' table...")
         cursor.execute("""
             SELECT indexname
@@ -85,18 +89,60 @@ def create_btree_index(connection):
         cursor.close()
 
 
+def insert_data(connection):
+    # Exemple de requête d'insertion
+    insert_query_template = """
+    INSERT INTO podcast_rankings (
+        date, rank, region, chart_rank_move, episode_uri, show_uri, episode_name, description, 
+        show_name, show_description, show_publisher, duration_ms, explicit, is_externally_hosted, 
+        is_playable, language, languages, release_date, release_date_precision, show_copyrights, 
+        show_explicit, show_href, show_html_description, show_is_externally_hosted, show_languages, 
+        show_media_type, show_total_episodes, show_type, show_uri2
+    ) VALUES (
+        '{date}', {rank}, 'US', {chart_rank_move}, 'episode_uri_{rank}', 'show_uri_{rank}', 
+        'Episode {rank}', 'Description of episode {rank}', 'Show {rank}', 
+        'Description of show {rank}', 'Publisher {rank}', {duration_ms}, false, false, 
+        true, 'en', 'en,fr', '{release_date}', 'day', 'Copyright {rank}', 
+        false, 'https://show_uri_{rank}', '<html>Description of show {rank}</html>', 
+        false, 'en,es', 'audio', {total_episodes}, 'podcast', 'show_uri2_{rank}'
+    );
+    """
+
+    # Boucle pour insérer 500 enregistrements avec des valeurs variables
+    data = []
+    for i in range(1, 501):  # Insertion de 500 lignes
+        date = f"2024-01-{i % 31 + 1:02d}"  # Exemple de date dynamique
+        rank = i
+        chart_rank_move = random.randint(-50, 50)
+        duration_ms = random.randint(1000000, 3000000)  # Durée entre 1M et 3M ms
+        release_date = date
+        total_episodes = random.randint(1, 500)
+
+        # Génération de la requête d'insertion
+        query = insert_query_template.format(
+            date=date,
+            rank=rank,
+            chart_rank_move=chart_rank_move,
+            duration_ms=duration_ms,
+            release_date=release_date,
+            total_episodes=total_episodes
+        )
+
+        # Mesurer le temps d'exécution pour chaque insertion
+        execution_time = measure_query_time(connection, query)
+
+        # Stocker le résultat avec l'index de la ligne et le temps d'exécution
+        data.append([i, execution_time])
+
+    return data
+
 def main():
     """Main function to connect and run queries."""
     connection = connect_to_db()
 
     if connection:
         try:
-            # Drop all existing indexes
-            drop_all_indexes(connection)
-
-            # Create a BTREE index
-#            create_btree_index(connection)
-
+            '''
             queries = [
                 "SELECT date FROM podcast_rankings WHERE date > '2024-09-01' AND date < '2024-10-01' OFFSET 0;",
             ]
@@ -115,7 +161,20 @@ def main():
         finally:
             connection.close()
             print("Connection closed.")
+        '''
 
+            data = insert_data(connection)
+
+            # Sauvegarder les résultats dans un fichier CSV
+            with open("basicOutput.csv", mode="w", newline="") as file:
+                writer = csv.writer(file)
+                writer.writerows(data)
+
+            print("Données insérées avec succès et résultats enregistrés.")
+
+        finally:
+            connection.close()
+            print("Connexion fermée.")
 
 if __name__ == "__main__":
     main()

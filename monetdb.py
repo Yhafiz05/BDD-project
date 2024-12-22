@@ -1,7 +1,10 @@
+import csv
 import time
-import pymonetdb
+import random
 
-def connect_to_monetdb():
+import pymonetdb
+from datetime import datetime, timedelta
+def connect_to_db():
     try:
         conn = pymonetdb.connect(
             user="monetdb",
@@ -16,43 +19,104 @@ def connect_to_monetdb():
         print(f"Erreur de connexion : {e}")
         return None
 
-# Fonction pour mesurer le temps d'exécution d'une requête
-def measure_query_time(query):
-    conn = connect_to_monetdb()
-    cursor = conn.cursor()
-
-    start_time = time.time()  # Temps avant l'exécution de la requête
-
+def measure_query_time(connection, query):
+    """Execute a query and measure the time it takes to complete."""
+    cursor = connection.cursor()
+    start_time = time.time()  # Start timer
     cursor.execute(query)
-    result = cursor.fetchall()  # Récupérer tous les résultats
+    end_time = time.time()  # Stop timer
 
-    end_time = time.time()  # Temps après l'exécution de la requête
-
-    # Calcul du temps d'exécution
     execution_time = end_time - start_time
-    print(f"Temps d'exécution de la requête : {execution_time:.6f} secondes")
-
+    print(f"Query executed in {execution_time:.6f} seconds")
     cursor.close()
-    conn.close()
+    return execution_time
 
-    return result, execution_time
+def insert_data(connection):
+    # Exemple de requête d'insertion
+    insert_query_template = """
+    INSERT INTO podcast_rankings (
+        date, rank, region, chart_rank_move, episode_uri, show_uri, episode_name, description, 
+        show_name, show_description, show_publisher, duration_ms, explicit, is_externally_hosted, 
+        is_playable, language, languages, release_date, release_date_precision, show_copyrights, 
+        show_explicit, show_href, show_html_description, show_is_externally_hosted, show_languages, 
+        show_media_type, show_total_episodes, show_type, show_uri2
+    ) VALUES (
+        '{date}', {rank}, 'US', {chart_rank_move}, 'episode_uri_{rank}', 'show_uri_{rank}', 
+        'Episode {rank}', 'Description of episode {rank}', 'Show {rank}', 
+        'Description of show {rank}', 'Publisher {rank}', {duration_ms}, false, false, 
+        true, 'en', 'en,fr', '{release_date}', 'day', 'Copyright {rank}', 
+        false, 'https://show_uri_{rank}', '<html>Description of show {rank}</html>', 
+        false, 'en,es', 'audio', {total_episodes}, 'podcast', 'show_uri2_{rank}'
+    );
+    """
+
+    # Boucle pour insérer 500 enregistrements avec des valeurs variables
+    data = []
+    for i in range(1, 501):  # Insertion de 500 lignes
+        date = f"2024-01-{i % 31 + 1:02d}"  # Exemple de date dynamique
+        rank = i
+        chart_rank_move = random.randint(-50, 50)
+        duration_ms = random.randint(1000000, 3000000)  # Durée entre 1M et 3M ms
+        release_date = date
+        total_episodes = random.randint(1, 500)
+
+        # Génération de la requête d'insertion
+        query = insert_query_template.format(
+            date=date,
+            rank=rank,
+            chart_rank_move=chart_rank_move,
+            duration_ms=duration_ms,
+            release_date=release_date,
+            total_episodes=total_episodes
+        )
+
+        # Mesurer le temps d'exécution pour chaque insertion
+        execution_time = measure_query_time(connection, query)
+
+        # Stocker le résultat avec l'index de la ligne et le temps d'exécution
+        data.append([i, execution_time])
+
+    return data
 
 def main():
-    # Exemple de requête
-    query = """SELECT * FROM podcast_rankings where region = 'us' limit 10;"""
+    """Main function to connect and run queries."""
+    connection = connect_to_db()
 
-    # Exécution et mesure du temps de la requête
-    result, exec_time = measure_query_time(query)
+    if connection:
+        try:
+            '''
+            queries = [
+                "SELECT date FROM podcast_rankings WHERE date > '2024-09-01' AND date < '2024-10-01' OFFSET 0;",
+            ]
 
-    # Affichage des résultats
-    print("\nRésultats de la requête:")
-    for row in result:
-        print(row)
+            for query in queries:
+                print(f"\nExecuting query: {query}")
+                data = []
+                for i in range(0, 500):
+                    data.append([i, measure_query_time(connection, query)])
 
-    # Affichage du temps total
-    print(f"\nTemps d'exécution total de la requête : {exec_time:.6f} secondes")
+                # Write results to a CSV file
+                with open("basicOutput.csv", mode="w", newline="") as file:
+                    writer = csv.writer(file)
+                    writer.writerows(data)
 
-if __name__=="__main__":
-    list = [] #Tableau à utiliser pour recupérer les temps d'exécution
-    connect_to_monetdb()
+        finally:
+            connection.close()
+            print("Connection closed.")
+        '''
+
+            data = insert_data(connection)
+
+            # Sauvegarder les résultats dans un fichier CSV
+            with open("basicOutput.csv", mode="w", newline="") as file:
+                writer = csv.writer(file)
+                writer.writerows(data)
+
+            print("Données insérées avec succès et résultats enregistrés.")
+
+        finally:
+            connection.close()
+            print("Connexion fermée.")
+
+if __name__ == "__main__":
     main()
